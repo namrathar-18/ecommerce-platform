@@ -4,12 +4,14 @@ Full-stack multi-vendor marketplace with atomic order management, built for a DB
 **Stack:** React + Vite + Redux Toolkit + Three.js + Recharts · Node/Express (layered) · MySQL 8 (InnoDB) · Prisma · JWT.
 
 **Highlights**
+- 🛍️ **80 real products** imported from the DummyJSON products API at seed time — real names,
+  descriptions, multi-photo galleries (CDN images), INR pricing, 7 categories split across 2 vendors
+- 💳 **MeshPay** — Razorpay-style test payment gateway (UPI / Card / NetBanking tabs, processing →
+  success/decline states). Declines: card `4000 0000 0000 0002` or UPI `fail@upi` — a decline cancels
+  the order server-side and releases reserved stock
 - 🧊 Animated **Three.js** hero (torus knot + particle field, orbiting colored lights)
-- 💳 **MeshPay** — a dummy payment gateway modal (card sheet, processing/success/decline states;
-  `4000 0000 0000 0002` simulates a decline, which cancels the order and releases reserved stock)
 - 📊 Admin dashboard with live **Recharts** charts (top products, revenue MoM via `LAG()`,
   vendor leaderboard via `RANK()`, CLV segmentation pie)
-- 🖼️ Local SVG product art in `frontend/public/images` (no external image dependencies)
 - 🔒 Atomic checkout with `SELECT … FOR UPDATE` — stress-tested: 8 concurrent buyers,
   1 unit in stock, exactly 1 success ([backend/tests/stress-concurrency.ts](backend/tests/stress-concurrency.ts))
 - 📖 Swagger UI at `http://localhost:4000/docs`

@@ -15,14 +15,24 @@ interface Product {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [cursor, setCursor] = useState<number | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("newest");
   const [toast, setToast] = useState("");
   const user = useAppSelector((s) => s.auth.user);
 
   const load = async () => {
-    const res = await api.get("/products", { params: { q: q || undefined, sort, limit: 12 } });
+    const res = await api.get("/products", { params: { q: q || undefined, sort, limit: 24 } });
     setProducts(res.data.items);
+    setCursor(res.data.nextCursor);
+  };
+  const loadMore = async () => {
+    if (!cursor) return;
+    const res = await api.get("/products", {
+      params: { q: q || undefined, sort, limit: 24, cursor },
+    });
+    setProducts((p) => [...p, ...res.data.items]);
+    setCursor(res.data.nextCursor);
   };
   useEffect(() => {
     load();
@@ -83,11 +93,13 @@ export default function ProductsPage() {
                     -{pct}%
                   </span>
                 )}
-                <img
-                  src={p.images[0]?.imageUrl}
-                  alt={p.name}
-                  className="w-full h-36 object-cover rounded-xl mb-2 group-hover:scale-[1.03] transition-transform duration-300"
-                />
+                <div className="w-full h-36 bg-slate-50 rounded-xl mb-2 overflow-hidden flex items-center justify-center">
+                  <img
+                    src={p.images[0]?.imageUrl}
+                    alt={p.name}
+                    className="max-h-full max-w-full object-contain group-hover:scale-[1.05] transition-transform duration-300"
+                  />
+                </div>
                 <h3 className="font-semibold text-sm text-slate-800">{p.name}</h3>
               </Link>
               <div className="mt-1 text-sm">
@@ -116,6 +128,17 @@ export default function ProductsPage() {
           );
         })}
       </div>
+
+      {cursor && (
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={loadMore}
+            className="px-8 py-2.5 rounded-xl bg-white border shadow-sm font-medium hover:border-indigo-400"
+          >
+            Load more products
+          </button>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-lg text-sm z-50">

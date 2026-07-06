@@ -2,12 +2,34 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../src/config/prisma.js";
 
 /**
- * Idempotent-ish seed: wipes and repopulates demo data.
+ * Seed with REAL product data from the DummyJSON products API
+ * (https://dummyjson.com/products) — real names, descriptions and CDN photos.
+ *
  * Logins (all password: Password123):
- *   admin@shop.dev  | ravi@shop.dev (vendor) | meera@shop.dev (vendor) | asha@shop.dev (customer)
+ *   admin@shop.dev | ravi@shop.dev (vendor) | meera@shop.dev (vendor)
+ *   asha@shop.dev, vikram@shop.dev (customers)
  */
+
+const USD_TO_INR = 83;
+
+// Tech categories go to Ravi Electronics; everything else to Meera Home & Lifestyle.
+const TECH = new Set(["smartphones", "laptops", "tablets", "mobile-accessories"]);
+
+const pretty = (slug: string) =>
+  slug.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+
+async function fetchProducts() {
+  const res = await fetch("https://dummyjson.com/products?limit=80");
+  if (!res.ok) throw new Error(`DummyJSON fetch failed: ${res.status}`);
+  const data = (await res.json()) as { products: any[] };
+  return data.products;
+}
+
 async function main() {
-  console.log("Seeding...");
+  console.log("Fetching real product data from dummyjson.com ...");
+  const apiProducts = await fetchProducts();
+  console.log(`Fetched ${apiProducts.length} products. Seeding...`);
+
   // Clear in FK-safe order
   await prisma.vendorPayout.deleteMany();
   await prisma.payment.deleteMany();
@@ -28,7 +50,7 @@ async function main() {
 
   const hash = await bcrypt.hash("Password123", 12);
 
-  const admin = await prisma.user.create({
+  await prisma.user.create({
     data: { name: "Site Admin", email: "admin@shop.dev", passwordHash: hash, role: "admin" },
   });
 
@@ -43,7 +65,7 @@ async function main() {
     data: { name: "Meera", email: "meera@shop.dev", passwordHash: hash, role: "vendor" },
   });
   const meera = await prisma.vendor.create({
-    data: { userId: meeraUser.id, storeName: "Meera Home & Kitchen", verificationStatus: "verified", commissionRate: 0.12 },
+    data: { userId: meeraUser.id, storeName: "Meera Home & Lifestyle", verificationStatus: "verified", commissionRate: 0.12 },
   });
 
   const asha = await prisma.user.create({
@@ -54,69 +76,97 @@ async function main() {
     data: { userId: asha.id, addressLine: "12 MG Road", city: "Bengaluru", state: "KA", pincode: "560001", isDefault: true },
   });
 
-  const electronics = await prisma.category.create({ data: { name: "Electronics" } });
-  const home = await prisma.category.create({ data: { name: "Home & Kitchen" } });
-
-  async function makeProduct(vendorId: bigint, categoryId: bigint, name: string, sku: string, price: number, qty: number, img: string, discount?: number) {
-    const p = await prisma.product.create({
-      data: { vendorId, categoryId, name, sku, price, discountPrice: discount ?? null },
-    });
-    await prisma.inventory.create({ data: { productId: p.id, quantity: qty } });
-    await prisma.productImage.create({ data: { productId: p.id, imageUrl: img, isPrimary: true } });
-    return p;
-  }
-
-  // Local SVG assets served by the frontend (frontend/public/images/*)
-  const p1 = await makeProduct(ravi.id, electronics.id, "Wireless Earbuds", "RAV-EAR-001", 2499, 50, "/images/earbuds.svg", 1999);
-  const p2 = await makeProduct(ravi.id, electronics.id, "USB-C Charger 65W", "RAV-CHG-002", 1899, 3, "/images/charger.svg");
-  const p3 = await makeProduct(ravi.id, electronics.id, "Bluetooth Speaker", "RAV-SPK-003", 3499, 20, "/images/speaker.svg");
-  const p4 = await makeProduct(meera.id, home.id, "Ceramic Mug Set", "MEE-MUG-001", 899, 100, "/images/mugs.svg");
-  const p5 = await makeProduct(meera.id, home.id, "Stainless Steel Bottle", "MEE-BTL-002", 649, 80, "/images/bottle.svg");
-  const p6 = await makeProduct(meera.id, home.id, "Non-stick Frying Pan", "MEE-PAN-003", 1299, 40, "/images/pan.svg", 999);
-
-  // A second customer so co-purchase recommendations have signal.
   const vikram = await prisma.user.create({
     data: { name: "Vikram", email: "vikram@shop.dev", passwordHash: hash, role: "customer" },
   });
   await prisma.cart.create({ data: { userId: vikram.id } });
 
-  // Historical delivered orders across 3 months -> non-null MoM growth % in analytics.
+  // Categories from the API data
+  const categoryIds = new Map<string, bigint>();
+  for (const p of apiProducts) {
+    if (!categoryIds.has(p.category)) {
+      const cat = await prisma.category.create({ data: { name: pretty(p.category) } });
+      categoryIds.set(p.category, cat.id);
+    }
+  }
+
+  // Products with real images
+  const seeded: { id: bigint; vendorId: bigint; price: number; title: string }[] = [];
+  for (const p of apiProducts) {
+    const vendor = TECH.has(p.category) ? ravi : meera;
+    const priceInr = Math.round(p.price * USD_TO_INR);
+    const hasDiscount = (p.discountPercentage ?? 0) >= 5;
+    const discountInr = hasDiscount
+      ? Math.round(priceInr * (1 - p.discountPercentage / 100))
+      : null;
+
+    const product = await prisma.product.create({
+      data: {
+        vendorId: vendor.id,
+        categoryId: categoryIds.get(p.category)!,
+        name: p.title,
+        description: p.description,
+        price: priceInr,
+        discountPrice: discountInr,
+        sku: `DJ-${p.id}`,
+      },
+    });
+    await prisma.inventory.create({
+      data: { productId: product.id, quantity: p.stock ?? 25, lowStockThreshold: 5 },
+    });
+
+    // real CDN photos: primary + up to 2 gallery shots
+    const urls: string[] = (p.images?.length ? p.images : [p.thumbnail]).slice(0, 3);
+    for (let i = 0; i < urls.length; i++) {
+      await prisma.productImage.create({
+        data: { productId: product.id, imageUrl: urls[i], isPrimary: i === 0 },
+      });
+    }
+    seeded.push({
+      id: product.id,
+      vendorId: vendor.id,
+      price: discountInr ?? priceInr,
+      title: p.title,
+    });
+  }
+
+  // Historical delivered orders across 3 months -> non-null MoM growth in analytics
   let txn = 0;
-  async function makeOrder(userId: bigint, when: Date, lines: Array<{ p: any; vendor: any; qty: number; price: number }>) {
-    const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
+  async function makeOrder(userId: bigint, when: Date, picks: number[]) {
+    const lines = picks.map((i) => seeded[i % seeded.length]);
+    const total = lines.reduce((s, l) => s + l.price, 0);
     const order = await prisma.order.create({
       data: { userId, status: "delivered", totalAmount: total, createdAt: when },
     });
     for (const l of lines) {
       await prisma.orderItem.create({
-        data: { orderId: order.id, productId: l.p.id, vendorId: l.vendor.id, quantity: l.qty, priceAtPurchase: l.price, itemStatus: "delivered" },
+        data: { orderId: order.id, productId: l.id, vendorId: l.vendorId, quantity: 1, priceAtPurchase: l.price, itemStatus: "delivered" },
       });
     }
     await prisma.payment.create({
       data: { orderId: order.id, amount: total, paymentMethod: "mock", paymentStatus: "success", transactionRef: `seed_txn_${++txn}`, createdAt: when },
     });
-    return order;
   }
 
   const may = (d: number) => new Date(2026, 4, d, 11);
   const jun = (d: number) => new Date(2026, 5, d, 15);
   const jul = (d: number) => new Date(2026, 6, d, 10);
 
-  await makeOrder(asha.id, may(6), [{ p: p1, vendor: ravi, qty: 1, price: 1999 }, { p: p4, vendor: meera, qty: 2, price: 899 }]);
-  await makeOrder(vikram.id, may(18), [{ p: p5, vendor: meera, qty: 1, price: 649 }]);
-  await makeOrder(asha.id, jun(3), [{ p: p3, vendor: ravi, qty: 1, price: 3499 }, { p: p6, vendor: meera, qty: 1, price: 999 }]);
-  await makeOrder(vikram.id, jun(14), [{ p: p1, vendor: ravi, qty: 1, price: 1999 }, { p: p4, vendor: meera, qty: 1, price: 899 }]);
-  await makeOrder(vikram.id, jun(25), [{ p: p2, vendor: ravi, qty: 1, price: 1899 }]);
-  await makeOrder(asha.id, jul(2), [{ p: p1, vendor: ravi, qty: 1, price: 1999 }, { p: p4, vendor: meera, qty: 1, price: 899 }]);
-  await makeOrder(vikram.id, jul(4), [{ p: p6, vendor: meera, qty: 2, price: 999 }, { p: p5, vendor: meera, qty: 1, price: 649 }]);
+  await makeOrder(asha.id, may(6), [0, 21]);
+  await makeOrder(vikram.id, may(18), [35]);
+  await makeOrder(asha.id, jun(3), [2, 40, 55]);
+  await makeOrder(vikram.id, jun(14), [0, 21]); // repeat pair -> co-purchase signal
+  await makeOrder(vikram.id, jun(25), [8, 63]);
+  await makeOrder(asha.id, jul(2), [0, 21, 70]);
+  await makeOrder(vikram.id, jul(4), [12, 44]);
 
-  await prisma.review.create({ data: { productId: p1.id, userId: asha.id, rating: 5, comment: "Great sound, deep bass!" } });
-  await prisma.review.create({ data: { productId: p1.id, userId: vikram.id, rating: 4, comment: "Solid for the price." } });
-  await prisma.review.create({ data: { productId: p4.id, userId: asha.id, rating: 5, comment: "Beautiful mugs, sturdy." } });
-  await prisma.review.create({ data: { productId: p3.id, userId: asha.id, rating: 4, comment: "Loud and clear." } });
+  // Reviews on purchased products (verified-purchase rule holds)
+  await prisma.review.create({ data: { productId: seeded[0].id, userId: asha.id, rating: 5, comment: "Excellent quality, exactly as described." } });
+  await prisma.review.create({ data: { productId: seeded[0].id, userId: vikram.id, rating: 4, comment: "Very good, fast delivery." } });
+  await prisma.review.create({ data: { productId: seeded[21].id, userId: asha.id, rating: 5, comment: "Love it — great value for money." } });
+  await prisma.review.create({ data: { productId: seeded[2].id, userId: asha.id, rating: 4, comment: "Works well, happy with the purchase." } });
 
-  console.log("Seed complete. Products:", [p1, p2, p3, p4, p5, p6].map((p) => Number(p.id)));
-  console.log("Admin:", Number(admin.id), "Ravi vendor:", Number(ravi.id), "Meera vendor:", Number(meera.id));
+  console.log(`Seed complete: ${seeded.length} real products across ${categoryIds.size} categories, 7 historical orders.`);
 }
 
 main()
