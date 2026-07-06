@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <circle cx="200" cy="145" r="85" fill="#ffffff22"/>
+  <g>
+    <rect x="130" y="115" width="70" height="80" rx="10" fill="#fff"/>
+    <path d="M200 130 h18 a18 18 0 0 1 0 40 h-18" stroke="#fff" stroke-width="10" fill="none"/>
+    <rect x="215" y="135" width="60" height="70" rx="9" fill="#ffe4c7"/>
+    <path d="M275 148 h15 a15 15 0 0 1 0 34 h-15" stroke="#ffe4c7" stroke-width="9" fill="none"/>
+    <path d="M150 95 q5 -12 0 -20 M170 95 q5 -12 0 -20" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+  <text x="200" y="265" text-anchor="middle" fill="#fff" font-family="Arial" font-size="22" font-weight="bold">Ceramic Mug Set</text>
+</svg>

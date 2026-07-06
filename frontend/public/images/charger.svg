@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#2dd4bf"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <circle cx="200" cy="145" r="85" fill="#ffffff22"/>
+  <rect x="160" y="100" width="80" height="80" rx="16" fill="#fff"/>
+  <path d="M205 112 l-22 34 h15 l-8 30 l26 -38 h-16 z" fill="#0ea5e9"/>
+  <rect x="188" y="185" width="8" height="25" rx="3" fill="#fff"/>
+  <rect x="206" y="185" width="8" height="25" rx="3" fill="#fff"/>
+  <text x="200" y="265" text-anchor="middle" fill="#fff" font-family="Arial" font-size="22" font-weight="bold">USB-C Charger 65W</text>
+</svg>

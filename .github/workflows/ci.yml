@@ -1,0 +1,38 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ecommerce
+          MYSQL_USER: ecom
+          MYSQL_PASSWORD: ecom_pw
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uecom -pecom_pw"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: "mysql://ecom:ecom_pw@127.0.0.1:3306/ecommerce"
+      JWT_ACCESS_SECRET: ci_secret
+      JWT_REFRESH_SECRET: ci_secret
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx prisma generate
+      - run: npx prisma db push
+      - run: npm run seed
+      - run: npm test

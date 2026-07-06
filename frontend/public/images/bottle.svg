@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <circle cx="200" cy="145" r="85" fill="#ffffff22"/>
+  <rect x="186" y="70" width="28" height="18" rx="5" fill="#fff"/>
+  <path d="M182 88 h36 q12 20 12 45 v60 a18 18 0 0 1 -18 18 h-24 a18 18 0 0 1 -18 -18 v-60 q0 -25 12 -45z" fill="#fff"/>
+  <rect x="176" y="130" width="48" height="34" fill="#06b6d4" opacity="0.7"/>
+  <text x="200" y="265" text-anchor="middle" fill="#fff" font-family="Arial" font-size="22" font-weight="bold">Steel Bottle</text>
+</svg>
